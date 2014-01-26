@@ -135,6 +135,19 @@ function Argv (processArgs, cwd) {
         }
         return self;
     };
+
+    var commands = {};
+    self.command = function (key, options) {
+        if (typeof key === 'object') {
+            Object.keys(key).forEach(function (k) {
+                self.command(k, key[k]);
+            });
+        }
+        else {
+            commands[key] = options;
+        }
+        return self;
+    };
     
     self.parse = function (args) {
         return parseArgs(args);
@@ -159,10 +172,16 @@ function Argv (processArgs, cwd) {
             if (opt.string || opt.type === 'string') {
                 self.string(key);
             }
-            
-            var desc = opt.describe || opt.description || opt.desc;
-            if (desc) {
-                self.describe(key, desc);
+
+            if (opt.command || opt.type === 'command') {
+                self.command(key, opt);
+            }
+            else
+            {
+                var desc = opt.describe || opt.description || opt.desc;
+                if (desc) {
+                    self.describe(key, desc);
+                }
             }
         }
         
@@ -273,6 +292,26 @@ function Argv (processArgs, cwd) {
             
             help.push(prelude + body);
         });
+
+        if (Object.keys(commands).length > 0) {
+            help.push('');
+            help.push('Commands:');
+        }
+
+        var cmdlen = longest(Object.keys(commands));
+        var cmddesclen = longest(Object.keys(commands).map(function (key) {
+            return commands[key].description || commands[key].describe || commands[key].desc || '';
+        }));
+
+        Object.keys(commands).forEach(function (key) {
+            var desc = commands[key].description || commands[key].describe || commands[key].desc || '';
+
+            var spadding = new Array(
+                Math.max(cmdlen - key.length + 4, 0)
+            ).join(' ');
+
+            help.push(new Array(3).join(' ') + key + spadding + desc);
+        });
         
         help.push('');
         return help.join('\n');
@@ -291,6 +330,10 @@ function Argv (processArgs, cwd) {
             fail('Not enough non-option arguments: got '
                 + argv._.length + ', need at least ' + demanded._
             );
+        }
+
+        if (argv._[0] && Object.keys(commands).indexOf(argv._[0]) != -1 && !argv.command) {
+            argv.command = argv._[0];
         }
         
         var missing = [];
